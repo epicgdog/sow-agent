@@ -22,3 +22,5 @@ dist/
 
 # AWS
 .aws/
+ 
+./frontend/node_modules
