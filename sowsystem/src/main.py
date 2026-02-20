@@ -1,11 +1,17 @@
 import os
+from dotenv import load_dotenv
 from strands import Agent
 from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig, RetrievalConfig
 from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from mcp_client.client import get_streamable_http_mcp_client
+from mcp_client.datadog_client import get_datadog_mcp_client
 from model.load import load_model
 from tools import list_project_files, read_sow_file, read_source_code, write_code_to_file
+from datadog_tools import get_datadog_tools
+
+# Load environment variables from .env
+load_dotenv()
 
 app = BedrockAgentCoreApp()
 log = app.logger
@@ -15,6 +21,9 @@ REGION = os.getenv("AWS_REGION")
 
 # Import AgentCore Gateway as Streamable HTTP MCP Client
 mcp_client = get_streamable_http_mcp_client()
+
+# Datadog MCP tools (returns [MCPClient] or [] if credentials missing)
+datadog_tools = get_datadog_tools()
 
 
 def create_auditor_agent(session_manager=None):
@@ -30,8 +39,14 @@ STRICT RULES:
 - You are FORBIDDEN from making implementation decisions
 - Output requirements in clear JSON format
 
+SELF-HEALING WITH DATADOG:
+Before analyzing the SOW, use Datadog tools to check for context:
+- Use search_datadog_incidents to find past SOW-related failures or incidents
+- Use search_datadog_logs to find historical errors from previous agent runs
+This helps you flag requirements that have historically caused issues.
+
 Your output should be a structured JSON with all requirements, deliverables, and constraints.""",
-        tools=[read_sow_file]
+        tools=[read_sow_file] + datadog_tools
     )
 
 
@@ -48,8 +63,15 @@ STRICT RULES:
 - You are FORBIDDEN from making recommendations or plans
 - Document what currently exists, not what should exist
 
+SELF-HEALING WITH DATADOG:
+Use Datadog tools to enrich your understanding of the runtime state:
+- Use search_datadog_services to discover what services are running
+- Use search_datadog_service_dependencies to understand service relationships
+- Use search_datadog_metrics to check error rates, latency, and health
+This gives the Architect real operational context beyond static code analysis.
+
 Your output should describe the current state of the /src directory.""",
-        tools=[read_source_code, list_project_files]
+        tools=[read_source_code, list_project_files] + datadog_tools
     )
 
 
@@ -66,12 +88,20 @@ STRICT RULES:
 - You are FORBIDDEN from reading files directly
 - You work with information provided to you by other agents
 
+SELF-HEALING WITH DATADOG:
+Use Datadog tools to make data-driven architectural decisions:
+- Use analyze_datadog_logs to understand recent error patterns
+- Use search_datadog_monitors to see what active alerts exist
+- Use search_datadog_incidents to learn from past failures
+- Use get_datadog_metric to check current system health metrics
+This ensures your plan addresses real production issues, not just code-level gaps.
+
 Your output should be a detailed technical plan specifying:
 1. What files need to be created/modified
 2. What code should go in each file
 3. Implementation approach and structure
 4. IMPORTANT: Explicitly document which AWS Bedrock model is being used (Amazon Nova or Anthropic Claude) in comments/docstrings""",
-        tools=[]
+        tools=[] + datadog_tools
     )
 
 
@@ -88,8 +118,14 @@ STRICT RULES:
 - You are FORBIDDEN from reading SOW documents
 - You MUST follow the Architect's plan exactly
 
+SELF-HEALING WITH DATADOG:
+After writing code, use Datadog tools to verify no immediate issues surface:
+- Use search_datadog_logs to check for deployment or runtime errors
+- Use get_datadog_trace to inspect recent traces for the affected service
+If errors are detected, adjust the code accordingly.
+
 Execute the plan step by step and report your progress.""",
-        tools=[write_code_to_file]
+        tools=[write_code_to_file] + datadog_tools
     )
 
 
@@ -108,8 +144,24 @@ STRICT RULES:
   * "PASS" if all requirements are met
   * "FAIL: [specific reason]" if requirements are not met
 
+SELF-HEALING WITH DATADOG:
+Use Datadog tools for evidence-based PASS/FAIL decisions:
+- Use analyze_datadog_logs to find errors related to the implementation
+- Use get_datadog_metric to check error rates and latency changes
+- Use search_datadog_incidents to see if new incidents appeared
+- Use search_datadog_monitors to check for triggered alerts
+
+IMPORTANT - LOGGING RUN RESULTS:
+After making your PASS/FAIL decision, use create_datadog_notebook to create a
+run report notebook containing:
+- SOW requirements summary
+- Implementation changes made
+- Your PASS/FAIL verdict with supporting evidence
+- Any relevant Datadog log snippets, metrics, or incident references
+Title the notebook: "SOW Agent Run Report - [PASS/FAIL] - [timestamp]"
+
 Be specific about what is missing or incorrect in FAIL messages.""",
-        tools=[read_sow_file, read_source_code]
+        tools=[read_sow_file, read_source_code] + datadog_tools
     )
 
 
@@ -192,7 +244,8 @@ SOW REQUIREMENTS:
 PREVIOUS FAILURE:
 {qa_result}
 
-Fix the issues and create an improved plan."""
+Use Datadog tools to investigate the root cause — check logs, metrics, and incidents
+for evidence of what went wrong. Fix the issues and create an improved plan."""
         
         architect_output = []
         async for chunk in architect.stream_async(architect_prompt):
@@ -217,7 +270,7 @@ Fix the issues and create an improved plan."""
         yield "\n\n=== QA JUDGE AGENT ===\n"
         qa_judge = create_qa_judge_agent(session_manager)
         qa_output = []
-        async for chunk in qa_judge.stream_async("Compare the SOW requirements against the implemented code in /src. Output PASS or FAIL: [reason]"):
+        async for chunk in qa_judge.stream_async("Compare the SOW requirements against the implemented code in /src. Output PASS or FAIL: [reason]. Then create a Datadog notebook with the run report."):
             if "data" in chunk and isinstance(chunk["data"], str):
                 qa_output.append(chunk["data"])
                 yield chunk["data"]
@@ -234,7 +287,7 @@ Fix the issues and create an improved plan."""
         elif qa_result.startswith("FAIL"):
             yield f"\n\n=== ❌ FAILED ATTEMPT {attempt}/{max_attempts} ===\n"
             if attempt < max_attempts:
-                yield "Sending feedback to Architect for revision...\n"
+                yield "Sending feedback to Architect for revision (with Datadog evidence)...\n"
             else:
                 yield f"Maximum attempts reached. Final status: {qa_result}\n"
         else:
