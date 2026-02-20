@@ -1,0 +1,7 @@
+{
+    "file_paths": {
+        "local_file": "path/to/local/file",
+        "python_code": "path/to/python/code",
+        "sow_document": "path/to/sow_document"
+    }
+}

@@ -44,10 +44,13 @@ def run_agents_on_project(workspace: Path, user_prompt: str = "Implement SOW req
         # Move to workspace root so agents can access src/, sow/, etc.
         os.chdir(workspace)
         
-        # Import AgentCore app (existing implementation)
-        from main import app
+        # Import the invoke function directly from main
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent / "src"))
         
-        # Create a mock payload and context for the entrypoint
+        from main import invoke, app
+        
+        # Create a mock context for the entrypoint
         class MockContext:
             session_id = "runner_session"
         
@@ -62,7 +65,8 @@ def run_agents_on_project(workspace: Path, user_prompt: str = "Implement SOW req
         # Run the existing agent workflow
         import asyncio
         async def run_workflow():
-            async for chunk in app.entrypoint(payload, MockContext()):
+            # Call the invoke function directly (not through app.entrypoint)
+            async for chunk in invoke(payload, MockContext()):
                 output_parts.append(chunk)
                 print(chunk, end='', flush=True)
         
@@ -97,8 +101,8 @@ def main():
     )
     parser.add_argument(
         "--sow",
-        default="sow_reference.md",
-        help="Path to SOW reference document (default: sow_reference.md)"
+        default="sow.md",
+        help="Path to SOW reference document (default: sow.md)"
     )
     parser.add_argument(
         "--prompt",
@@ -148,13 +152,25 @@ def main():
         workspace_manager.copy_project_to_workspace(project_path, workspace)
         print(f"✓ Project copied to {workspace / 'src'}")
         
-        # Step 4: Copy SOW to workspace
+    # Step 4: Copy SOW to workspace
         sow_path = Path(args.sow)
         if sow_path.exists():
             workspace_manager.copy_sow_to_workspace(sow_path, workspace)
-            print(f"✓ SOW copied to workspace")
+            print(f"✓ SOW copied to {workspace / 'sow' / 'sow_reference.md'}")
         else:
-            print(f"⚠️  SOW file not found: {sow_path}")
+            print(f"⚠️  SOW file not found: {sow_path}, using default location")
+            # Try to find sow_reference.md in current directory
+            default_sow = Path("sow_reference.md")
+            if default_sow.exists():
+                workspace_manager.copy_sow_to_workspace(default_sow, workspace)
+                print(f"✓ Found and copied default SOW")
+        
+        # Also copy SOW to workspace root for tools to find
+        sow_in_workspace = workspace / "sow" / "sow_reference.md"
+        if sow_in_workspace.exists():
+            import shutil
+            shutil.copy2(sow_in_workspace, workspace / "sow_reference.md")
+            print(f"✓ SOW also copied to workspace root")
         
         # Step 5: Create snapshot
         print("\n📸 Creating snapshot...")

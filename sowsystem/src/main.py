@@ -69,7 +69,8 @@ STRICT RULES:
 Your output should be a detailed technical plan specifying:
 1. What files need to be created/modified
 2. What code should go in each file
-3. Implementation approach and structure""",
+3. Implementation approach and structure
+4. IMPORTANT: Explicitly document which AWS Bedrock model is being used (Amazon Nova or Anthropic Claude) in comments/docstrings""",
         tools=[]
     )
 
@@ -145,8 +146,12 @@ async def invoke(payload, context):
     auditor = create_auditor_agent(session_manager)
     auditor_output = []
     async for chunk in auditor.stream_async(f"Read and analyze the SOW requirements. User context: {user_prompt}"):
-        auditor_output.append(chunk)
-        yield chunk
+        if "data" in chunk and isinstance(chunk["data"], str):
+            auditor_output.append(chunk["data"])
+            yield chunk["data"]
+        elif isinstance(chunk, str):
+            auditor_output.append(chunk)
+            yield chunk
     sow_requirements = "".join(auditor_output)
     
     # Step 2: Bridge reads current code state
@@ -154,8 +159,12 @@ async def invoke(payload, context):
     bridge = create_bridge_agent(session_manager)
     bridge_output = []
     async for chunk in bridge.stream_async("Read and document the current 'As-Is' state of the /src directory"):
-        bridge_output.append(chunk)
-        yield chunk
+        if "data" in chunk and isinstance(chunk["data"], str):
+            bridge_output.append(chunk["data"])
+            yield chunk["data"]
+        elif isinstance(chunk, str):
+            bridge_output.append(chunk)
+            yield chunk
     current_state = "".join(bridge_output)
     
     # Self-Healing Loop
@@ -187,23 +196,34 @@ Fix the issues and create an improved plan."""
         
         architect_output = []
         async for chunk in architect.stream_async(architect_prompt):
-            architect_output.append(chunk)
-            yield chunk
+            if "data" in chunk and isinstance(chunk["data"], str):
+                architect_output.append(chunk["data"])
+                yield chunk["data"]
+            elif isinstance(chunk, str):
+                architect_output.append(chunk)
+                yield chunk
         implementation_plan = "".join(architect_output)
         
         # Step 4: Artisan executes plan
         yield "\n\n=== ARTISAN AGENT ===\n"
         artisan = create_artisan_agent(session_manager)
         async for chunk in artisan.stream_async(f"Execute this implementation plan:\n\n{implementation_plan}"):
-            yield chunk
+            if "data" in chunk and isinstance(chunk["data"], str):
+                yield chunk["data"]
+            elif isinstance(chunk, str):
+                yield chunk
         
         # Step 5: QA Judge validates
         yield "\n\n=== QA JUDGE AGENT ===\n"
         qa_judge = create_qa_judge_agent(session_manager)
         qa_output = []
         async for chunk in qa_judge.stream_async("Compare the SOW requirements against the implemented code in /src. Output PASS or FAIL: [reason]"):
-            qa_output.append(chunk)
-            yield chunk
+            if "data" in chunk and isinstance(chunk["data"], str):
+                qa_output.append(chunk["data"])
+                yield chunk["data"]
+            elif isinstance(chunk, str):
+                qa_output.append(chunk)
+                yield chunk
         qa_result = "".join(qa_output).strip()
         
         # Check QA result
