@@ -23,3 +23,14 @@ def read_sow_file() -> str:
         return "Error: sow_reference.md file not found"
     except Exception as e:
         return f"Error reading file: {str(e)}"
+
+
+@tool
+def write_code_to_file(filename: str, content: str) -> str:
+    """Write code content to a specified file"""
+    try:
+        with open(filename, 'w') as f:
+            f.write(content)
+        return f"Successfully wrote to {filename}"
+    except Exception as e:
+        return f"Error writing to {filename}: {str(e)}"
