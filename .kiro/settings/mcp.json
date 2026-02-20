@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "bedrock-agent": {
+      "command": "python",
+      "args": ["mcp_server/bedrock_agent_server.py"],
+      "env": {
+        "AWS_REGION": "us-east-1"
+      },
+      "disabled": false,
+      "autoApprove": ["invoke_bedrock_agent"]
+    }
+  }
+}
