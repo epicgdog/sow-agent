@@ -47,6 +47,22 @@ AWS_SECRET_ACCESS_KEY=your_secret_key_here
 aws sts get-caller-identity
 ```
 
+## Dashboard (run on a repo + auto-push)
+
+The frontend can run the agent on a GitHub repo and optionally push changes to a new branch:
+
+1. From the repo root, run the Next.js app:
+   ```bash
+   cd frontend && npm install && npm run dev
+   ```
+2. Open the dashboard, enter a **GitHub repo URL** (e.g. `https://github.com/owner/repo`).
+3. Optionally enable **Auto-push to GitHub** so that after a successful run the changes are committed and pushed to a new branch `sow-agent/run-YYYYMMDD-HHMMSS` (you can then open a PR).
+4. For auto-push, set a GitHub token with repo write access:
+   - In `frontend/.env.local`: `GITHUB_TOKEN=ghp_...`
+   - The API route passes it to the runner when you check "Auto-push to GitHub".
+
+If you leave the repo URL empty, **Start** runs a mock pipeline only (no backend call).
+
 ## Running the Agent System
 
 ### Option 1: Direct Development Mode

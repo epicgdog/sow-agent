@@ -4,20 +4,6 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RefreshCw, ChevronDown, ChevronRight, Terminal } from "lucide-react";
 
-const PLACEHOLDER_SOW = `# Statement of Work
-
-## Objective
-Describe the scope and deliverables for this engagement.
-
-## Requirements
-- Clear acceptance criteria
-- Timeline and milestones
-- Success metrics
-
-## Notes
-Add any context that helps the agent understand your needs.
-`;
-
 const SAMPLE_DIFF_OLD = `export function oldHelper() {
   return "legacy";
 }
@@ -31,13 +17,20 @@ const SAMPLE_DIFF_NEW = `export function newHelper() {
 type WorkAreaProps = {
   refinementMode: boolean;
   onRefinementToggle: (value: boolean) => void;
+  sowContent: string;
+  onSowChange: (content: string) => void;
+  runLog?: string[];
+  isRunning?: boolean;
 };
 
 export function WorkArea({
   refinementMode,
   onRefinementToggle,
+  sowContent,
+  onSowChange,
+  runLog = [],
+  isRunning = false,
 }: WorkAreaProps) {
-  const [sowContent, setSowContent] = useState(PLACEHOLDER_SOW);
   const [technicalOpen, setTechnicalOpen] = useState(false);
   const [showDiff, setShowDiff] = useState(false);
 
@@ -76,7 +69,7 @@ export function WorkArea({
           <div className="flex-1 overflow-auto p-4">
             <textarea
               value={sowContent}
-              onChange={(e) => setSowContent(e.target.value)}
+              onChange={(e) => onSowChange(e.target.value)}
               placeholder="Describe your requirements..."
               className="min-h-[280px] w-full resize-none rounded-xl border border-slate-200 bg-slate-50/50 p-4 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               spellCheck={false}
@@ -151,7 +144,11 @@ export function WorkArea({
               className="border-t border-slate-200/80 bg-slate-50/50 overflow-hidden"
             >
               <pre className="overflow-auto p-4 text-xs text-slate-600 font-mono whitespace-pre">
-                {`[SOW Agent] Pipeline started
+                {runLog.length > 0
+                  ? runLog.join("\n")
+                  : isRunning
+                    ? "Starting..."
+                    : `[SOW Agent] Pipeline started
 [Auditor] Parsing requirements...
 [Bridge] Scanning repository...
 [Architect] Generating plan...

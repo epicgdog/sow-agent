@@ -119,6 +119,11 @@ def main():
         default="./workspaces",
         help="Base directory for workspaces (default: ./workspaces)"
     )
+    parser.add_argument(
+        "--push",
+        action="store_true",
+        help="After success, push workspace changes to a new GitHub branch (requires GITHUB_TOKEN)"
+    )
     
     args = parser.parse_args()
     
@@ -185,6 +190,19 @@ def main():
         
         print("=" * 60)
         print(f"\n📊 Final Status: {final_status}")
+        
+        # Step 8: Optional push to GitHub
+        if final_status.startswith("PASS") and args.push:
+            repo_url = args.project
+            if repo_url.startswith("git@"):
+                print("\n⚠️  Auto-push uses HTTPS; use a GitHub HTTPS URL for --push.")
+            else:
+                try:
+                    from push_to_github import push_workspace_to_github
+                    branch = push_workspace_to_github(workspace, repo_url)
+                    print(f"\n📤 Pushed to branch: {branch}")
+                except Exception as e:
+                    print(f"\n⚠️  Push failed: {e}", file=sys.stderr)
         
         # Step 7: Cleanup (optional)
         if not args.keep_workspace:
